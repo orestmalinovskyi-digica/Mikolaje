@@ -14,6 +14,7 @@ import pickle
 import matplotlib.image as mpimg
 
 
+# Handling data loading
 def load_datasets(direct=None, batch_size=10, val_size=.1, test_size=.1, im_shape=(224, 224), seed=8):
     if direct is None:
         direct = "images/dataset"
@@ -61,6 +62,8 @@ def load_datasets(direct=None, batch_size=10, val_size=.1, test_size=.1, im_shap
     return train_ds, val_ds
 
 
+"""
+# An alternative I preferred not to use
 def load_ds(path):
     img_gen = tf.keras.preprocessing.image.ImageDataGenerator()
     ds = tf.data.Dataset.from_generator(lambda: img_gen.flow_from_directory(path),  # 'images/dataset'),
@@ -68,8 +71,10 @@ def load_ds(path):
                                         output_shapes=([32, 256, 256, 3], [32, 2])
                                         )
     return ds
+"""
 
 
+# Plot example pics
 def plot_example(train, class_names, n=9):
     # SOURCE: https://www.tensorflow.org/tutorials/load_data/images
     l = round(np.sqrt(n))
@@ -85,6 +90,7 @@ def plot_example(train, class_names, n=9):
     plt.show()
 
 
+# normalize dataset according to ResNetV2 needs
 def preprocess(dataset):
     # SOURCE: https://www.tensorflow.org/tutorials/load_data/images
     normalized_ds = dataset.map(lambda x, y: (tf.keras.applications.resnet_v2.preprocess_input(x), y))
@@ -93,6 +99,8 @@ def preprocess(dataset):
     ds = normalized_ds.cache().prefetch(buffer_size=AUTOTUNE)
     return ds
 
+
+# Functions of top layers structure
 
 def top_simpler(start_model):
     x = layers.Dense(1, activation="sigmoid")(start_model.output)
@@ -122,7 +130,7 @@ def build_model(if_complex=True):
     init_model = tf.keras.applications.ResNet50V2(
         include_top=False,
         weights="imagenet",
-        pooling="max"
+        pooling="avg"
     )
 
     # Plotting model structure to a file
@@ -174,7 +182,7 @@ def load_model(load_history=True):
     return model, history
 
 
-def get_model(if_load):
+def get_model(if_load, if_complex):
     if if_load:
         if os.path.exists('saved_model.h5'):
             if os.path.exists('history.p'):
@@ -186,7 +194,7 @@ def get_model(if_load):
             raise NameError('Could not find the model file')
     else:
         # train the model and save it and the history to a file
-        model, history = train_and_save()
+        model, history = train_and_save(if_complex)
     return model, history
 
 
@@ -211,19 +219,27 @@ if __name__ == '__main__':
     print(np.min(first_image), np.max(first_image))
     """
 
-    if_load = True  # whether to load a trained model
-    my_model, train_history = get_model(if_load)
+    if_load = True  # whether to load a trained model (will train it and save a new model if False)
+    if_complex = True  # if we train the model from the beginning, - whether to load simpler or elaborated top layers
+    my_model, train_history = get_model(if_load=if_load, if_complex=if_complex)
 
-    test_image = load_img("images/peops/person_252.bmp", target_size=(224,224))
+    test_image = load_img("images/black_santa.jpg", target_size=(224, 224))
     image = img_to_array(test_image)
     image = image.reshape((1, image.shape[0], image.shape[1], image.shape[2]))
     image = tf.keras.applications.resnet_v2.preprocess_input(image)
     pred = my_model.predict(image)
 
-    #test_image = mpimg.imread("images/peops/person_252.bmp")
-    plt.imshow(test_image) #.numpy().astype("uint8"))
+    # test_image = mpimg.imread("images/peops/person_252.bmp")
+    plt.imshow(test_image)  # .numpy().astype("uint8"))
     plt.title(class_names[round(pred[0][0])])
     plt.axis("off")
+    #a = list(val_ds)
+    #np.concatenate(list(map(lambda x: x.numpy(), a[:,1])), 0)
+
+    preds = my_model.predict(val_ds)
+    #for im in val_ds:
+    #    print(im)
+    # TODO: Rename folder dataset to old_dataset, make confusion matrix, show 20-30 images the model didn't predict well
     plt.show()
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/
