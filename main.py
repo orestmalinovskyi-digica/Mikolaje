@@ -15,9 +15,9 @@ import matplotlib.image as mpimg
 
 
 # Handling data loading
-def load_datasets(direct=None, batch_size=10, val_size=.1, test_size=.1, im_shape=(224, 224), seed=8):
+def load_datasets(direct=None, batch_size=10, val_size=.1, im_shape=(224, 224), seed=8):
     if direct is None:
-        direct = "images/dataset"
+        direct = "images/train"
     train_ds = tf.keras.preprocessing.image_dataset_from_directory(  # CAN'T USE VAL SPLIT CAUSE I NEED BOTH VAL AND
         # TEST SPLIT
         directory=direct,
@@ -28,7 +28,7 @@ def load_datasets(direct=None, batch_size=10, val_size=.1, test_size=.1, im_shap
         color_mode='rgb',
         image_size=im_shape,
         shuffle=True,
-        validation_split=val_size + test_size,
+        validation_split=val_size,
         seed=seed
     )  # pip install tf-nightly if can't load the class
     # SOURCE:
@@ -56,7 +56,7 @@ def load_datasets(direct=None, batch_size=10, val_size=.1, test_size=.1, im_shap
         color_mode='rgb',
         image_size=im_shape,
         shuffle=True,
-        validation_split=val_size + test_size,
+        validation_split=val_size,
         seed=seed
     )  # pip install tf-nightly if can't load the class
     return train_ds, val_ds
@@ -200,7 +200,8 @@ def get_model(if_load, if_complex):
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    train, val = load_datasets()
+    batch_size = 20
+    train, val = load_datasets(batch_size=batch_size)
 
     # SOURCE: https://www.tensorflow.org/tutorials/load_data/images
 
@@ -236,9 +237,33 @@ if __name__ == '__main__':
     #a = list(val_ds)
     #np.concatenate(list(map(lambda x: x.numpy(), a[:,1])), 0)
 
-    preds = my_model.predict(val_ds)
+
+    train_preds = my_model.predict(train_ds)
+    preds = np.round(train_preds.flatten())
+
+    # transform dataset object to a list:
+    train_list = list(train_ds)
+    labels = np.array(train_list)[:, 1]
+
+    # Now I need to flatten the labels
+    labels = map(lambda x: x.numpy(), labels)
+    labels = np.concatenate(list(labels), 0)
+
+    falses = np.argwhere(labels != preds).flatten()
+    images = np.array(train_list)[:, 0].flatten()
     #for im in val_ds:
     #    print(im)
+
+
+    """
+    # An alternative
+    for i in range(len(list(train_ds))):
+        for images, labels in train_ds.take(i+1):  # only take ith element of dataset
+            numpy_images = images.numpy()
+            numpy_labels = labels.numpy()
+            preds = my_model.predict(numpy_images)
+            pass
+    """
     # TODO: Rename folder dataset to old_dataset, make confusion matrix, show 20-30 images the model didn't predict well
     plt.show()
 
