@@ -1,7 +1,40 @@
-# This is a sample Python script.
+"""
+├── create_test_set.py                # copies files in a controlled random manner into train and test folders
+├── detect_and_remove_duplicates.py   # detects and deletes images-duplicates based on their hashes
+├── history.p                         # latest model training history dict
+├── images/                           # directory with all the images
+│   ├── black_santa.jpg               # there were only two black santas in the raw dataset
+│   ├── Grinch.jpg                    # Grinch dressed as santa
+│   ├── Mrs_Claus.jpg                 # santa's wife otherwise dressed like him
+│   ├── Nicolaus.jpg                  # St Nicholas icon
+│   ├── old_dataset/                  # deprecated dataset used earlier for training
+│   │   ├── person/
+│   │   │   └─ *.bmp
+│   │   └── santa/
+│   │       └─ *.jpg
+│   ├── raw/                          # contains all images, that however are already checked for duplicates and
+│   │   ├── peops/                    # filtered manually
+│   │   │   └─ *.bmp
+│   │   └── santas/
+│   │       └─ *.jpg
+│   ├── test/                         # test directory
+│   │   ├── person/
+│   │   │   └─ *.bmp
+│   │   └── santa/
+│   │       └─ *.jpg
+│   └── train/                        # train directory
+│       ├── person/
+│       │   └─ *.bmp
+│       └── santa/
+│           └─ *.jpg
+├── main.py                           # you are here
+├── model_plot.png                    # a plot of ResNet50V2 layer structure
+├── print_file_structure.py           # a file that helped me make this comment about structure
+├── santa_download.py                 # a file that downloads images from a file containing corresponding urls
+├── saved_model.h5                    # saved training model
+└── urls.txt                          # file containing urls for santa pictures
 
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
+"""
 
 import tensorflow as tf
 import numpy as np
@@ -18,75 +51,90 @@ import matplotlib.image as mpimg
 def load_datasets(direct=None, batch_size=10, val_size=.1, im_shape=(224, 224), seed=8):
     if direct is None:
         direct = "images/train"
-    train_ds = tf.keras.preprocessing.image_dataset_from_directory(  # CAN'T USE VAL SPLIT CAUSE I NEED BOTH VAL AND
-        # TEST SPLIT
-        directory=direct,
-        subset='training',
-        labels='inferred',
-        label_mode='int',
-        batch_size=batch_size,
-        color_mode='rgb',
-        image_size=im_shape,
-        shuffle=True,
-        validation_split=val_size,
-        seed=seed
-    )  # pip install tf-nightly if can't load the class
-    # SOURCE:
-    # https://stackoverflow.com/questions/48213766/split-a-dataset-created-by-tensorflow-dataset-api-in-to-train-and-test
-    """
-    DATASET_SIZE = len(list(full_ds))
-    v_size = int(val_size * DATASET_SIZE)
-    tt_size = int(test_size * DATASET_SIZE)
-    tn_size = DATASET_SIZE - v_size - tt_size
+    if val_size:
+        train_ds = tf.keras.preprocessing.image_dataset_from_directory(  # CAN'T USE VAL SPLIT CAUSE I NEED BOTH VAL AND
+            # TEST SPLIT
+            directory=direct,
+            subset='training',
+            labels='inferred',
+            label_mode='int',
+            batch_size=batch_size,
+            color_mode='rgb',
+            image_size=im_shape,
+            shuffle=True,
+            validation_split=val_size,
+            seed=seed
+        )  # pip install tf-nightly if can't load the class
+        # SOURCE:
+        # https://stackoverflow.com/questions/48213766/split-a-dataset-created-by-tensorflow-dataset-api-in-to-train-and-test
+        """
+        DATASET_SIZE = len(list(full_ds))
+        v_size = int(val_size * DATASET_SIZE)
+        tt_size = int(test_size * DATASET_SIZE)
+        tn_size = DATASET_SIZE - v_size - tt_size
 
-    train_ds = full_ds.take(tn_size)  # the ds is already shuffled
-    test_ds = full_ds.skip(tn_size)
-    val_ds = test_ds.skip(v_size)
-    test_ds = test_ds.take(tt_size)
+        train_ds = full_ds.take(tn_size)  # the ds is already shuffled
+        test_ds = full_ds.skip(tn_size)
+        val_ds = test_ds.skip(v_size)
+        test_ds = test_ds.take(tt_size)
 
-    return train_ds, val_ds.as_numpy_iterator(), test_ds.as_numpy_iterator()  # TODO: probably rewrite the code, it needs to be rescalable and probably test
-    # set I will have to create manually"""
-    val_ds = tf.keras.preprocessing.image_dataset_from_directory(  # CAN'T USE VAL SPLIT CAUSE I NEED BOTH VAL AND
-        # TEST SPLIT
-        directory=direct,
-        subset='validation',
-        labels='inferred',
-        label_mode='int',
-        batch_size=batch_size,
-        color_mode='rgb',
-        image_size=im_shape,
-        shuffle=True,
-        validation_split=val_size,
-        seed=seed
-    )  # pip install tf-nightly if can't load the class
-    return train_ds, val_ds
+        return train_ds, val_ds.as_numpy_iterator(), test_ds.as_numpy_iterator()  # TODO: probably rewrite the code, it needs to be rescalable and probably test
+        # set I will have to create manually"""
+
+        val_ds = tf.keras.preprocessing.image_dataset_from_directory(  # CAN'T USE VAL SPLIT CAUSE I NEED BOTH VAL AND
+            # TEST SPLIT
+            directory=direct,
+            subset='validation',
+            labels='inferred',
+            label_mode='int',
+            batch_size=batch_size,
+            color_mode='rgb',
+            image_size=im_shape,
+            shuffle=True,
+            validation_split=val_size,
+            seed=seed
+        )  # pip install tf-nightly if can't load the class
+        return train_ds, val_ds
+    else:
+        train_ds = tf.keras.preprocessing.image_dataset_from_directory(  # CAN'T USE VAL SPLIT CAUSE I NEED BOTH VAL AND
+            # TEST SPLIT
+            directory=direct,
+            labels='inferred',
+            label_mode='int',
+            batch_size=batch_size,
+            color_mode='rgb',
+            image_size=im_shape,
+            shuffle=True,
+            seed=seed
+        )  # pip install tf-nightly if can't load the class
+        return train_ds, None
 
 
-"""
 # An alternative I preferred not to use
-def load_ds(path):
-    img_gen = tf.keras.preprocessing.image.ImageDataGenerator()
-    ds = tf.data.Dataset.from_generator(lambda: img_gen.flow_from_directory(path),  # 'images/dataset'),
-                                        output_types=(tf.float32, tf.float32),
-                                        output_shapes=([32, 256, 256, 3], [32, 2])
-                                        )
+def load_test_ds(path="images/test"):
+    img_gen = tf.keras.preprocessing.image.ImageDataGenerator(
+        preprocessing_function=tf.keras.applications.resnet_v2.preprocess_input)
+    ds = lambda: img_gen.flow_from_directory(directory=path,
+                                     target_size=(224, 224),
+                                     batch_size=1,
+                                     class_mode=None)
+    ds = tf.data.Dataset.from_generator(ds, output_types=tf.float32)
     return ds
-"""
 
 
 # Plot example pics
-def plot_example(train, class_names, n=9):
+def plot_example(images, labels, class_names, n=9):
     # SOURCE: https://www.tensorflow.org/tutorials/load_data/images
     l = round(np.sqrt(n))
     d = round(n / l)
 
     plt.figure(figsize=(10, 10))
-    for images, labels in train.take(1):
-        for i in range(l * d):
-            ax = plt.subplot(l, d, i + 1)
-            plt.imshow(images[i].numpy().astype("uint8"))
-            plt.title(class_names[labels[i]])
-            plt.axis("off")
+    # for images, labels in ds.take(1):
+    for i in range(l * d):
+        ax = plt.subplot(l, d, i + 1)
+        plt.imshow(images[i].numpy().astype("uint8"))
+        plt.title(class_names[labels[i]])
+        plt.axis("off")
     plt.show()
 
 
@@ -154,12 +202,12 @@ def build_model(if_complex=True):
     return model
 
 
-def train_and_save(if_complex=True, save_history=True):
+def train_and_save(train_dataset, val_dataset, if_complex=True, save_history=True, ):
     # build the model
     model = build_model(if_complex)
 
-    n_batches = len(list(train_ds))
-    resnet_history = model.fit(train_ds, validation_data=val_ds, steps_per_epoch=n_batches, epochs=6)
+    n_batches = len(list(train_dataset))
+    resnet_history = model.fit(train_dataset, validation_data=val_dataset, steps_per_epoch=n_batches, epochs=6)
 
     model_fname = "saved_model.h5"
     model.save(model_fname)
@@ -182,7 +230,7 @@ def load_model(load_history=True):
     return model, history
 
 
-def get_model(if_load, if_complex):
+def get_model(if_load, if_complex, train_dataset, val_dataset):
     if if_load:
         if os.path.exists('saved_model.h5'):
             if os.path.exists('history.p'):
@@ -194,66 +242,117 @@ def get_model(if_load, if_complex):
             raise NameError('Could not find the model file')
     else:
         # train the model and save it and the history to a file
-        model, history = train_and_save(if_complex)
+        model, history = train_and_save(train_dataset=train_dataset, val_dataset=val_dataset, if_complex=if_complex)
     return model, history
+
+
+def visualize_misclassified(ds, model, class_names):
+    preds = model.predict(ds)
+    preds = np.round(preds.flatten()).astype(int)
+
+    # transform dataset object to a list:
+    pred_list = list(ds)
+
+    # take labels from the dataset as a numpy array
+    labels = np.array(pred_list, dtype=object)[:, 1]
+
+    # Now I need to flatten the labels
+    # convert every batch to numpy array
+    labels = map(lambda x: x.numpy(), labels)
+
+    # join all batches along 0 axis
+    labels = np.concatenate(list(labels), 0)
+
+    # take indexes of where the classificator did a mistake
+    falses = np.argwhere(labels != preds).flatten()
+
+    if not len(falses):
+        print('\nNo misclassified images!\n')
+        return
+
+    # take images from the predicted dataset
+    images = np.array(pred_list, dtype=object)[:, 0].flatten()
+
+    # calculate the indexes of the wrongly classified images and their labels
+    n_batches = len(list(ds))
+    n_labels = labels.shape[0]
+    n_cols = np.ceil(n_labels / n_batches)
+    row_ns = (falses // n_cols).astype(int)
+    column_ns = (falses % n_cols).astype(int)
+
+    # get only wrongly classified images and labels
+    images = tf.gather(images[row_ns][0], column_ns)
+    images = (images * 255. / 2 + 255. / 2)  # rescale the image back, ResNetV2 uses [-1,1] input values
+
+    preds = preds[falses.astype(int)]  # get wrongly classified images' labels
+    plot_example(images, preds, class_names, len(falses))  # plot the images and their values
 
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    batch_size = 20
-    train, val = load_datasets(batch_size=batch_size)
-
-    # SOURCE: https://www.tensorflow.org/tutorials/load_data/images
-
-    class_names = train.class_names
-
-    plot_example(train, class_names)  # plot 9 images with their labels
-
-    # preprocess the images datasets to fit into the model
-    train_ds = preprocess(train)
-    val_ds = preprocess(val)
-
-    """
-    image_batch, labels_batch = next(iter(train_ds))  # normalized_ds))
-    first_image = image_batch[0]
-    # Notice the pixels values are now in `[-1,1]`.
-    print(np.min(first_image), np.max(first_image))
-    """
 
     if_load = True  # whether to load a trained model (will train it and save a new model if False)
     if_complex = True  # if we train the model from the beginning, - whether to load simpler or elaborated top layers
-    my_model, train_history = get_model(if_load=if_load, if_complex=if_complex)
 
+    if not if_load:  # TODO: in the else clause the train and validation should be None
+        batch_size = 20
+        train, val = load_datasets(batch_size=batch_size)
+
+        # SOURCE: https://www.tensorflow.org/tutorials/load_data/images
+
+        class_names = train.class_names
+        pickle.dump(class_names, open("class_names.p", 'wb'))
+
+        for images, labels in train.take(1):
+            plot_example(images, labels, class_names)  # plot 9 images with their labels
+
+        # preprocess the images datasets to fit into the model
+        train_ds = preprocess(train)
+        val_ds = preprocess(val)
+
+        """
+        image_batch, labels_batch = next(iter(train_ds))  # normalized_ds))
+        first_image = image_batch[0]
+        # Notice the pixels values are now in `[-1,1]`.
+        print(np.min(first_image), np.max(first_image))
+        """
+    else:
+        class_names = pickle.load(open("class_names.p", "rb"))
+        train_ds = val_ds = None
+
+    my_model, train_history = get_model(train_dataset=train_ds,
+                                        val_dataset=val_ds,
+                                        if_load=if_load,
+                                        if_complex=if_complex)
+
+    """
     test_image = load_img("images/black_santa.jpg", target_size=(224, 224))
     image = img_to_array(test_image)
     image = image.reshape((1, image.shape[0], image.shape[1], image.shape[2]))
     image = tf.keras.applications.resnet_v2.preprocess_input(image)
-    pred = my_model.predict(image)
+    image = tf.convert_to_tensor(image)
+    pred = np.round(my_model.predict(image).flatten()).astype(int)
+    image = (image * 255. / 2 + 255. / 2)  # rescale the image back, ResNetV2 uses [-1,1] input values
+    plot_example(image, pred, class_names, n=1)
+    """
 
-    # test_image = mpimg.imread("images/peops/person_252.bmp")
-    plt.imshow(test_image)  # .numpy().astype("uint8"))
-    plt.title(class_names[round(pred[0][0])])
-    plt.axis("off")
-    #a = list(val_ds)
-    #np.concatenate(list(map(lambda x: x.numpy(), a[:,1])), 0)
+    if if_load:
+        # test = load_test_ds()
+        test, temp = load_datasets("images/test", 2, 0, (224, 224))
+        test = preprocess(test)
+        # results = my_model.evaluate(test)
+        # print(results)
+        visualize_misclassified(test, my_model, class_names)
+        test = load_test_ds("images/interesting_examples")
+        #x = next(test)
+        #image = x[0, :, :, :]
+        # preds = np.round(my_model.predict(np.expand_dims(image, axis=0))).flatten().astype(int)
+        preds = np.round(my_model.predict(test)).flatten().astype(int)
+        plot_example(list(iter(test)), preds, class_names, n=test.n)
 
-
-    train_preds = my_model.predict(train_ds)
-    preds = np.round(train_preds.flatten())
-
-    # transform dataset object to a list:
-    train_list = list(train_ds)
-    labels = np.array(train_list)[:, 1]
-
-    # Now I need to flatten the labels
-    labels = map(lambda x: x.numpy(), labels)
-    labels = np.concatenate(list(labels), 0)
-
-    falses = np.argwhere(labels != preds).flatten()
-    images = np.array(train_list)[:, 0].flatten()
-    #for im in val_ds:
-    #    print(im)
-
+    else:
+        visualize_misclassified(train_ds, my_model, class_names)
+        visualize_misclassified(val_ds, my_model, class_names)
 
     """
     # An alternative
@@ -264,7 +363,6 @@ if __name__ == '__main__':
             preds = my_model.predict(numpy_images)
             pass
     """
-    # TODO: Rename folder dataset to old_dataset, make confusion matrix, show 20-30 images the model didn't predict well
     plt.show()
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/
