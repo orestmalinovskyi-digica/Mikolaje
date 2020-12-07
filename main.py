@@ -3,10 +3,9 @@
 ├── detect_and_remove_duplicates.py   # detects and deletes images-duplicates based on their hashes
 ├── history.p                         # latest model training history dict
 ├── images/                           # directory with all the images
-│   ├── black_santa.jpg               # there were only two black santas in the raw dataset
-│   ├── Grinch.jpg                    # Grinch dressed as santa
-│   ├── Mrs_Claus.jpg                 # santa's wife otherwise dressed like him
-│   ├── Nicolaus.jpg                  # St Nicholas icon
+│   ├── interesting_examples/         # interesting examples like black santa, Grinch etc
+│   │   └── exmp/
+│   │       └─ *.jpg
 │   ├── old_dataset/                  # deprecated dataset used earlier for training
 │   │   ├── person/
 │   │   │   └─ *.bmp
@@ -65,21 +64,6 @@ def load_datasets(direct=None, batch_size=10, val_size=.1, im_shape=(224, 224), 
             validation_split=val_size,
             seed=seed
         )  # pip install tf-nightly if can't load the class
-        # SOURCE:
-        # https://stackoverflow.com/questions/48213766/split-a-dataset-created-by-tensorflow-dataset-api-in-to-train-and-test
-        """
-        DATASET_SIZE = len(list(full_ds))
-        v_size = int(val_size * DATASET_SIZE)
-        tt_size = int(test_size * DATASET_SIZE)
-        tn_size = DATASET_SIZE - v_size - tt_size
-
-        train_ds = full_ds.take(tn_size)  # the ds is already shuffled
-        test_ds = full_ds.skip(tn_size)
-        val_ds = test_ds.skip(v_size)
-        test_ds = test_ds.take(tt_size)
-
-        return train_ds, val_ds.as_numpy_iterator(), test_ds.as_numpy_iterator()  # TODO: probably rewrite the code, it needs to be rescalable and probably test
-        # set I will have to create manually"""
 
         val_ds = tf.keras.preprocessing.image_dataset_from_directory(  # CAN'T USE VAL SPLIT CAUSE I NEED BOTH VAL AND
             # TEST SPLIT
@@ -110,31 +94,37 @@ def load_datasets(direct=None, batch_size=10, val_size=.1, im_shape=(224, 224), 
         return train_ds, None
 
 
+"""
 # An alternative I preferred not to use
 def load_test_ds(path="images/test"):
     img_gen = tf.keras.preprocessing.image.ImageDataGenerator(
         preprocessing_function=tf.keras.applications.resnet_v2.preprocess_input)
     ds = lambda: img_gen.flow_from_directory(directory=path,
-                                     target_size=(224, 224),
-                                     batch_size=1,
-                                     class_mode=None)
+                                             target_size=(224, 224),
+                                             batch_size=2,
+                                             class_mode=None)
     ds = tf.data.Dataset.from_generator(ds, output_types=tf.float32)
     return ds
+"""
 
 
 # Plot example pics
-def plot_example(images, labels, class_names, n=9):
+def plot_example(images, labels, class_names, n=9, win_name=None):
     # SOURCE: https://www.tensorflow.org/tutorials/load_data/images
     l = round(np.sqrt(n))
-    d = round(n / l)
+    d = np.ceil(n / l).astype(int)
 
     plt.figure(figsize=(10, 10))
-    # for images, labels in ds.take(1):
     for i in range(l * d):
+        if i == n:
+            break
         ax = plt.subplot(l, d, i + 1)
         plt.imshow(images[i].numpy().astype("uint8"))
         plt.title(class_names[labels[i]])
         plt.axis("off")
+        if win_name is not None:
+            fig = ax.figure
+            fig.canvas.set_window_title(win_name)
     plt.show()
 
 
@@ -246,7 +236,7 @@ def get_model(if_load, if_complex, train_dataset, val_dataset):
     return model, history
 
 
-def visualize_misclassified(ds, model, class_names):
+def visualize_misclassified(ds, model, cl_names, win_name):
     preds = model.predict(ds)
     preds = np.round(preds.flatten()).astype(int)
 
@@ -285,23 +275,44 @@ def visualize_misclassified(ds, model, class_names):
     images = (images * 255. / 2 + 255. / 2)  # rescale the image back, ResNetV2 uses [-1,1] input values
 
     preds = preds[falses.astype(int)]  # get wrongly classified images' labels
-    plot_example(images, preds, class_names, len(falses))  # plot the images and their values
+    plot_example(images, preds, cl_names, len(falses), win_name)  # plot the images and their values
+
+
+def visualize_one(path, model, cl_names):
+    # load the image and preprocess it to fit into classificator
+    test_image = load_img(path, target_size=(224, 224))
+    image = img_to_array(test_image)
+    image = image.reshape((1, image.shape[0], image.shape[1], image.shape[2]))
+    image = tf.keras.applications.resnet_v2.preprocess_input(image)
+    image = tf.convert_to_tensor(image)
+
+    # predict its label from the model
+    pred = np.round(model.predict(image).flatten()).astype(int)
+
+    image = (image * 255. / 2 + 255. / 2)  # rescale the image back, ResNetV2 uses [-1,1] input values
+    plot_example(image, pred, cl_names, n=1)
+    plt.show()
 
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
 
-    if_load = True  # whether to load a trained model (will train it and save a new model if False)
-    if_complex = True  # if we train the model from the beginning, - whether to load simpler or elaborated top layers
+    if_load = True      # whether to load a trained model (will train it and save a new model if False)
+    if_complex = True   # if we train the model from the beginning, - whether to load simpler or elaborated top layers
+    if_load_dss = False  # whether to load training and validation datasets
 
-    if not if_load:  # TODO: in the else clause the train and validation should be None
+    if_load_dss = False if not if_load else if_load_dss  # if we train new model, we should load the datasets
+
+    if if_load_dss:
+        class_names = pickle.load(open("class_names.p", "rb"))
+        train_ds = val_ds = None
+    else:
         batch_size = 20
         train, val = load_datasets(batch_size=batch_size)
 
         # SOURCE: https://www.tensorflow.org/tutorials/load_data/images
 
         class_names = train.class_names
-        pickle.dump(class_names, open("class_names.p", 'wb'))
 
         for images, labels in train.take(1):
             plot_example(images, labels, class_names)  # plot 9 images with their labels
@@ -310,59 +321,54 @@ if __name__ == '__main__':
         train_ds = preprocess(train)
         val_ds = preprocess(val)
 
-        """
-        image_batch, labels_batch = next(iter(train_ds))  # normalized_ds))
-        first_image = image_batch[0]
-        # Notice the pixels values are now in `[-1,1]`.
-        print(np.min(first_image), np.max(first_image))
-        """
-    else:
-        class_names = pickle.load(open("class_names.p", "rb"))
-        train_ds = val_ds = None
+        pickle.dump(class_names, open("class_names.p", 'wb'))
 
     my_model, train_history = get_model(train_dataset=train_ds,
                                         val_dataset=val_ds,
                                         if_load=if_load,
                                         if_complex=if_complex)
 
-    """
-    test_image = load_img("images/black_santa.jpg", target_size=(224, 224))
-    image = img_to_array(test_image)
-    image = image.reshape((1, image.shape[0], image.shape[1], image.shape[2]))
-    image = tf.keras.applications.resnet_v2.preprocess_input(image)
-    image = tf.convert_to_tensor(image)
-    pred = np.round(my_model.predict(image).flatten()).astype(int)
-    image = (image * 255. / 2 + 255. / 2)  # rescale the image back, ResNetV2 uses [-1,1] input values
-    plot_example(image, pred, class_names, n=1)
-    """
-
-    if if_load:
-        # test = load_test_ds()
+    if if_load_dss:
+        # load test set and evaluate the model and visualize misclassified images
         test, temp = load_datasets("images/test", 2, 0, (224, 224))
         test = preprocess(test)
         # results = my_model.evaluate(test)
         # print(results)
-        visualize_misclassified(test, my_model, class_names)
-        test = load_test_ds("images/interesting_examples")
-        #x = next(test)
-        #image = x[0, :, :, :]
-        # preds = np.round(my_model.predict(np.expand_dims(image, axis=0))).flatten().astype(int)
+        visualize_misclassified(test, my_model, class_names, win_name='Misclassified test')
+
+        # load interesting images for this problem
+        test, temp = load_datasets("images/interesting_examples", 1, 0, (224, 224))
+        test = preprocess(test)
         preds = np.round(my_model.predict(test)).flatten().astype(int)
-        plot_example(list(iter(test)), preds, class_names, n=test.n)
+
+        # rearrange the dataset so that it can be plottable with plot_examle
+        test = list(test)
+        test = [x[0] for x in test]  # the 0 element is an image, the 1 element is label
+        images = tf.convert_to_tensor(test)[:, 0, :, :, :]
+        images = (images * 255. / 2 + 255. / 2)  # rescale the image back, ResNetV2 uses [-1,1] input values
+        plot_example(images, preds, class_names, n=images.shape[0])
 
     else:
-        visualize_misclassified(train_ds, my_model, class_names)
-        visualize_misclassified(val_ds, my_model, class_names)
+        visualize_misclassified(train_ds, my_model, class_names, win_name='Misclassified train')
+        visualize_misclassified(val_ds, my_model, class_names, win_name='Misclassified validation')
 
-    """
-    # An alternative
-    for i in range(len(list(train_ds))):
-        for images, labels in train_ds.take(i+1):  # only take ith element of dataset
-            numpy_images = images.numpy()
-            numpy_labels = labels.numpy()
-            preds = my_model.predict(numpy_images)
-            pass
-    """
+    # SOURCE: https://machinelearningmastery.com/display-deep-learning-model-training-history-in-keras/
+    print(train_history.keys())
+    # summarize history for accuracy
+    plt.plot(train_history['acc'])
+    plt.plot(train_history['val_acc'])
+    plt.title('model accuracy')
+    plt.ylabel('accuracy')
+    plt.xlabel('epoch')
+    plt.legend(['train', 'validation'], loc='upper left')
     plt.show()
+    # summarize history for loss
+    plt.plot(train_history['loss'])
+    plt.plot(train_history['val_loss'])
+    plt.title('model loss')
+    plt.ylabel('loss')
+    plt.xlabel('epoch')
+    plt.legend(['train', 'validation'], loc='upper left')
+plt.show()
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/
