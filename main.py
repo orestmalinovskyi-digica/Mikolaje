@@ -43,6 +43,7 @@ from tensorflow.keras.preprocessing.image import load_img
 from tensorflow.keras.preprocessing.image import img_to_array
 import os
 import pickle
+import shap
 import matplotlib.image as mpimg
 
 
@@ -278,14 +279,18 @@ def visualize_misclassified(ds, model, cl_names, win_name):
     plot_example(images, preds, cl_names, len(falses), win_name)  # plot the images and their values
 
 
-def visualize_one(path, model, cl_names):
+def load_one(path):
     # load the image and preprocess it to fit into classificator
     test_image = load_img(path, target_size=(224, 224))
     image = img_to_array(test_image)
     image = image.reshape((1, image.shape[0], image.shape[1], image.shape[2]))
     image = tf.keras.applications.resnet_v2.preprocess_input(image)
     image = tf.convert_to_tensor(image)
+    return image
 
+
+def visualize_one(path, model, cl_names):
+    image = load_one(path)
     # predict its label from the model
     pred = np.round(model.predict(image).flatten()).astype(int)
 
@@ -299,7 +304,7 @@ if __name__ == '__main__':
 
     if_load = True      # whether to load a trained model (will train it and save a new model if False)
     if_complex = True   # if we train the model from the beginning, - whether to load simpler or elaborated top layers
-    if_load_dss = False  # whether to load training and validation datasets
+    if_load_dss = True  # whether to load training and validation datasets
 
     if_load_dss = False if not if_load else if_load_dss  # if we train new model, we should load the datasets
 
@@ -369,6 +374,12 @@ if __name__ == '__main__':
     plt.ylabel('loss')
     plt.xlabel('epoch')
     plt.legend(['train', 'validation'], loc='upper left')
-plt.show()
+    plt.show()
+
+    shap_img = load_one("images/train/santa/00000436.jpg")
+    e = shap.DeepExplainer(my_model, shap_img)  # 2gi argument to ma być background z iluś trainingowych obrazków
+    shap_values = e.shap_values(shap_img)  # tu ma byc lista z ciekawych obrazków
+    shap.image_plot(shap_values, -shap_img)
+    plt.show()
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/

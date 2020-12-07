@@ -1,0 +1,7 @@
+tensorflow~=2.3.0
+numpy~=1.19.2
+shap~=0.37.0
+requests~=2.25.0
+opencv-python~=4.4.0.46
+imutils~=0.5.3
+scikit-learn~=0.23.2
