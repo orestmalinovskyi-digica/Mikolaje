@@ -142,6 +142,8 @@ def preprocess(dataset):
 # Functions of top layers structure
 
 def top_simpler(start_model):
+    # Flatten the output layer to 1 dimension
+    x = layers.Flatten()(start_model.output)
     x = layers.Dense(1, activation="sigmoid")(start_model.output)
 
     return tf.keras.models.Model(start_model.input, x)
@@ -198,6 +200,7 @@ def train_and_save(train_dataset, val_dataset, if_complex=True, save_history=Tru
     model = build_model(if_complex)
 
     n_batches = len(list(train_dataset))
+    print(f'there are {n_batches} batches')
     resnet_history = model.fit(train_dataset, validation_data=val_dataset, steps_per_epoch=n_batches, epochs=6)
 
     model_fname = "saved_model.h5"
@@ -206,7 +209,7 @@ def train_and_save(train_dataset, val_dataset, if_complex=True, save_history=Tru
     if save_history:
         pickle.dump(resnet_history.history, open("history.p", 'wb'))
 
-    return model, resnet_history
+    return model, resnet_history.history
 
 
 def load_model(load_history=True):
@@ -237,7 +240,7 @@ def get_model(if_load, if_complex, train_dataset, val_dataset):
     return model, history
 
 
-def visualize_misclassified(ds, model, cl_names, win_name):
+def visualize_misclassified(ds, model, cl_names, win_name=None):
     preds = model.predict(ds)
     preds = np.round(preds.flatten()).astype(int)
 
@@ -258,7 +261,7 @@ def visualize_misclassified(ds, model, cl_names, win_name):
     falses = np.argwhere(labels != preds).flatten()
 
     if not len(falses):
-        print('\nNo misclassified images!\n')
+        print(f'\nNo misclassified images in the "{win_name}"!\n')
         return
 
     # take images from the predicted dataset
@@ -299,6 +302,17 @@ def visualize_one(path, model, cl_names):
     plt.show()
 
 
+def check_gpu():
+    tf.debugging.set_log_device_placement(True)
+
+    # Create some tensors
+    a = tf.constant([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+    b = tf.constant([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+    c = tf.matmul(a, b)
+
+    print(c)
+
+
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
 
@@ -306,12 +320,9 @@ if __name__ == '__main__':
     if_complex = True   # if we train the model from the beginning, - whether to load simpler or elaborated top layers
     if_load_dss = True  # whether to load training and validation datasets
 
-    if_load_dss = False if not if_load else if_load_dss  # if we train new model, we should load the datasets
+    if_load_dss = True if not if_load else if_load_dss  # if we train new model, we should load the datasets
 
     if if_load_dss:
-        class_names = pickle.load(open("class_names.p", "rb"))
-        train_ds = val_ds = None
-    else:
         batch_size = 20
         train, val = load_datasets(batch_size=batch_size)
 
@@ -320,13 +331,16 @@ if __name__ == '__main__':
         class_names = train.class_names
 
         for images, labels in train.take(1):
-            plot_example(images, labels, class_names)  # plot 9 images with their labels
+            plot_example(images, labels, class_names, win_name="Example train images with labels")
 
         # preprocess the images datasets to fit into the model
         train_ds = preprocess(train)
         val_ds = preprocess(val)
 
         pickle.dump(class_names, open("class_names.p", 'wb'))
+    else:
+        class_names = pickle.load(open("class_names.p", "rb"))
+        train_ds = val_ds = None
 
     my_model, train_history = get_model(train_dataset=train_ds,
                                         val_dataset=val_ds,
@@ -334,6 +348,10 @@ if __name__ == '__main__':
                                         if_complex=if_complex)
 
     if if_load_dss:
+        visualize_misclassified(train_ds, my_model, class_names, win_name='Misclassified train')
+        visualize_misclassified(val_ds, my_model, class_names, win_name='Misclassified validation')
+
+    else:
         # load test set and evaluate the model and visualize misclassified images
         test, temp = load_datasets("images/test", 2, 0, (224, 224))
         test = preprocess(test)
@@ -352,10 +370,6 @@ if __name__ == '__main__':
         images = tf.convert_to_tensor(test)[:, 0, :, :, :]
         images = (images * 255. / 2 + 255. / 2)  # rescale the image back, ResNetV2 uses [-1,1] input values
         plot_example(images, preds, class_names, n=images.shape[0])
-
-    else:
-        visualize_misclassified(train_ds, my_model, class_names, win_name='Misclassified train')
-        visualize_misclassified(val_ds, my_model, class_names, win_name='Misclassified validation')
 
     # SOURCE: https://machinelearningmastery.com/display-deep-learning-model-training-history-in-keras/
     print(train_history.keys())
@@ -377,7 +391,8 @@ if __name__ == '__main__':
     plt.show()
 
     shap_img = load_one("images/train/santa/00000436.jpg")
-    e = shap.DeepExplainer(my_model, shap_img)  # 2gi argument to ma być background z iluś trainingowych obrazków
+    shap_img_1 = load_one("images/interesting_examples/exmp/Grinch.jpg")
+    e = shap.DeepExplainer(my_model, list(train_ds.take(1))[0][0])  # 2gi argument to ma być background z iluś trainingowych obrazków
     shap_values = e.shap_values(shap_img)  # tu ma byc lista z ciekawych obrazków
     shap.image_plot(shap_values, -shap_img)
     plt.show()

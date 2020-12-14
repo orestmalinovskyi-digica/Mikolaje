@@ -33,7 +33,9 @@ def make_sets(class_name, class_dir, test_split=.1):
     f_set = ret_structure(class_dir)
     train, test = train_test_split(f_set, test_size=test_split)
 
-    print(f'{class_name}: Created {len(train)} instances for training set and {len(test)} instances for test set')
+    # Print to Console what and how much was splitted
+    print(f'{class_name}: Created {len(train)} instances for training set '
+          f'and {len(test)} instances for test set')
 
     # copy the files to corresponding directories
     for piece in test:
@@ -42,5 +44,5 @@ def make_sets(class_name, class_dir, test_split=.1):
         copy2(src=os.path.join(class_dir, piece), dst=train_dir)
 
 
-make_sets("santa", "images/santas")
-make_sets("person", "images/peops")
+make_sets("santa", "images/raw/santas")
+make_sets("person", "images/raw/peops")
